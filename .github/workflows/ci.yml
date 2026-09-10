@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: PHPUnit and PHPStan in the project container
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker compose build
+
+      # install, not update. The lock file is what makes the PHPStan verdict below
+      # reproducible, and a CI run that resolved its own dependencies would not be
+      # checking the same thing a reviewer checks locally.
+      - name: Install dependencies
+        run: docker compose run --rm -T app composer install --no-interaction --no-progress
+
+      - name: Run PHPUnit
+        run: docker compose run --rm -T app vendor/bin/phpunit
+
+      # --error-format=github turns findings into annotations on the diff. That flag
+      # is the only difference between this and the command in the README.
+      - name: Run PHPStan
+        run: docker compose run --rm -T app vendor/bin/phpstan analyse --no-progress --error-format=github
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes

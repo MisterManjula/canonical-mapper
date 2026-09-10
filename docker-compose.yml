@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    working_dir: /app
+    volumes:
+      # Source is bind-mounted so edits apply without a rebuild.
+      - .:/app
+      # vendor/ is a named volume rather than part of the bind mount. The project
+      # lives on the NTFS side of the Docker VM, where writing the ~1500 files a
+      # Composer install produces takes minutes and reading them on every PHPUnit
+      # run costs seconds. composer.lock is a single file in the bind mount, so it
+      # still lands on the host where it can be committed.
+      - vendor:/app/vendor
+      # PHPStan's default tmpDir. Without this every `run --rm` would start from a
+      # cold result cache and re-analyse the whole project.
+      - phpstan-cache:/tmp/phpstan
+      - composer-cache:/tmp/composer-cache
+    environment:
+      COMPOSER_CACHE_DIR: /tmp/composer-cache
+      # The container runs as root, which is correct for a throwaway toolbox and
+      # for nothing else. This silences Composer's warning rather than pretending
+      # the situation is different.
+      COMPOSER_ALLOW_SUPERUSER: "1"
+
+volumes:
+  vendor:
+  phpstan-cache:
+  composer-cache:

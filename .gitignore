@@ -1,0 +1,19 @@
+### Project
+# Installed inside the container, into a named volume, and pinned by composer.lock.
+/vendor/
+
+.phpunit.result.cache
+.phpunit.cache/
+
+### Windows
+# Windows thumbnail cache files
+Thumbs.db
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows shortcuts
+*.lnk

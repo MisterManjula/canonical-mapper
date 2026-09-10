@@ -1,0 +1,49 @@
+parameters:
+    level: max
+
+    paths:
+        - src
+        - tests
+        # bin/normalise is added here when it exists. It has no .php extension, so
+        # it must be listed as a file rather than picked up from a directory.
+
+    excludePaths:
+        analyseAndScan:
+            # Deliberately broken code, kept as the evidence that an adapter which
+            # forgets the Unresolved branch cannot pass analysis. It is analysed by
+            # its own config, from a test that asserts the exact error. Scanning it
+            # here would make the main run red on purpose.
+            - tests/Fixtures/PhpStan/*
+
+    # Analyse for the version the container runs, not for whatever happens to be
+    # executing PHPStan.
+    phpVersion: 80300
+
+    # level: max is not the strictest PHPStan can be. These five are opt-in at every
+    # level, and each one is doing work in this project:
+    #
+    #   uninitialized properties — every value object uses promoted readonly
+    #     properties, so this costs nothing today and catches the first
+    #     non-promoted property someone adds later.
+    #   benevolent union types — the XML and CSV APIs return "string, or false on
+    #     failure" everywhere. Without this, PHPStan quietly treats those as their
+    #     happy case, which is precisely the guessing this repository argues against.
+    #   too-wide return types — catches a method declared `Resolved|Unresolved` that
+    #     can in fact only ever return Resolved, i.e. a branch that was never wired up.
+    #   possibly-nonexistent offsets — the CSV adapter reads $row['PLU']. This is what
+    #     forces a missing column to be handled rather than assumed.
+    checkUninitializedProperties: true
+    checkBenevolentUnionTypes: true
+    checkTooWideReturnTypesInProtectedAndPublicMethods: true
+    reportPossiblyNonexistentGeneralArrayOffset: true
+    reportPossiblyNonexistentConstantArrayOffset: true
+
+# There is no baseline, and there is no `includes:` line that could grow into one.
+#
+# checkImplicitMixed is deliberately absent: it *is* level max on PHPStan 2.x, and
+# listing it here would suggest max leaves it off.
+#
+# phpstan/phpstan-strict-rules was left out as a third dependency carrying rules
+# unrelated to the claim this repository makes. phpstan/phpstan-phpunit was left out
+# for a sharper reason: it teaches PHPStan that assertInstanceOf() narrows a type,
+# and the tests are supposed to narrow a Resolution the same way the adapters do.

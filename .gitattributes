@@ -1,0 +1,11 @@
+# Everything here is consumed inside Linux containers; keep LF on checkout
+# regardless of the host platform or the developer's core.autocrlf setting.
+* text=auto eol=lf
+
+# The equivalence guarantee is a byte comparison against a fixture. A CRLF checkout
+# of that fixture would make the suite pass in CI and fail on a Windows
+# workstation, so the three source formats and the expected output are pinned again
+# here rather than left to text=auto's content sniffing.
+*.json text eol=lf
+*.xml  text eol=lf
+*.csv  text eol=lf
