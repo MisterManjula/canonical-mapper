@@ -1,0 +1,40 @@
+{
+    "menu": {
+        "products": [
+            {
+                "plu": "000099",
+                "name": "Espresso",
+                "price": "1.10"
+            },
+            {
+                "plu": "001100",
+                "name": "Croissant",
+                "price": "1.65"
+            },
+            {
+                "plu": "001204",
+                "name": "Orange juice",
+                "price": "3.05"
+            },
+            {
+                "plu": "001310",
+                "name": "Breakfast set",
+                "price": "2.42",
+                "components": [
+                    {
+                        "plu": "000099",
+                        "name": "Espresso",
+                        "price": "1.10",
+                        "quantity": 1
+                    },
+                    {
+                        "plu": "001100",
+                        "name": "Croissant",
+                        "price": "1.65",
+                        "quantity": 1
+                    }
+                ]
+            }
+        ]
+    }
+}

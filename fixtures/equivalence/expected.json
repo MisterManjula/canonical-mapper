@@ -1,0 +1,42 @@
+{
+    "currency": "EUR",
+    "items": [
+        {
+            "sku": "99",
+            "name": "Espresso",
+            "price": 110,
+            "components": [],
+            "promotion": null
+        },
+        {
+            "sku": "1100",
+            "name": "Croissant",
+            "price": 165,
+            "components": [],
+            "promotion": null
+        },
+        {
+            "sku": "1204",
+            "name": "Orange juice",
+            "price": 305,
+            "components": [],
+            "promotion": null
+        },
+        {
+            "sku": "1310",
+            "name": "Breakfast set",
+            "price": 242,
+            "components": [
+                {
+                    "sku": "99",
+                    "quantity": 1
+                },
+                {
+                    "sku": "1100",
+                    "quantity": 1
+                }
+            ],
+            "promotion": null
+        }
+    ]
+}

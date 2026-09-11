@@ -20,9 +20,9 @@ use PHPUnit\Framework\TestCase;
  * ResolutionCannotBeBypassedTest, because it is not observable at runtime — the
  * code that would demonstrate it cannot be written.
  *
- * Everything here goes through resolvePrice(), which is shaped like the adapter
- * method that arrives in step 4, rather than constructing a Resolved or an
- * Unresolved directly. That is not ceremony. Building the concrete type makes the
+ * Everything here goes through resolvePrice(), which is shaped like a real
+ * adapter method, rather than constructing a Resolved or an Unresolved
+ * directly. That is not ceremony. Building the concrete type makes the
  * static type concrete too, so the instanceof that follows is always true and the
  * test demonstrates nothing; PHPStan says so in as many words. Only a value whose
  * declared type is the union has a branch to handle, so only that shape is worth
@@ -84,8 +84,8 @@ final class ResolutionTest extends TestCase
     }
 
     /**
-     * The shape every adapter method takes from step 4 onwards, in miniature:
-     * declared as the union, resolving where it can and flagging where it cannot.
+     * The shape every adapter method takes, in miniature: declared as the union,
+     * resolving where it can and flagging where it cannot.
      *
      * @return Resolved<Money>|Unresolved
      */
