@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalogue>
+    <product code="99" name="Espresso" net="100" vat="V10"/>
+    <product code="1100" name="Croissant" net="150" vat="V10"/>
+    <product code="1204" name="Orange juice" net="250" vat="V22"/>
+    <product code="1310" name="Breakfast set" net="220" vat="V10">
+        <component code="99" qty="1"/>
+        <component code="1100" qty="1"/>
+    </product>
+</catalogue>
