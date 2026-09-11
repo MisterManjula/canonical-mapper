@@ -1,0 +1,23 @@
+# The settings the project is analysed with, applied to one fixture file at a time.
+#
+# It is a copy rather than an `includes: ../../../phpstan.neon`, and the duplication
+# is deliberate: including the real config would drag in its excludePaths, which
+# exist precisely to keep these two files out of an analysis. The paths are passed
+# on the command line by ResolutionCannotBeBypassedTest.
+#
+# If this file and the one at the project root ever drift apart, the evidence stops
+# being evidence — the test would be demonstrating something about a configuration
+# the project does not use. Change them together.
+parameters:
+    level: max
+
+    phpVersion: 80300
+
+    scanDirectories:
+        - ../../../src
+
+    checkUninitializedProperties: true
+    checkBenevolentUnionTypes: true
+    checkTooWideReturnTypesInProtectedAndPublicMethods: true
+    reportPossiblyNonexistentGeneralArrayOffset: true
+    reportPossiblyNonexistentConstantArrayOffset: true
