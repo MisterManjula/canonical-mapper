@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Tests\Fixtures\PhpStan;
 
-use CanonicalMapper\Canonical\Money;
-use CanonicalMapper\Resolution\Flag;
-use CanonicalMapper\Resolution\Resolved;
-use CanonicalMapper\Resolution\SourceSystem;
-use CanonicalMapper\Resolution\Unresolved;
+use CanonicalMapper\Domain\Canonical\Money;
+use CanonicalMapper\Domain\Resolution\Flag;
+use CanonicalMapper\Domain\Resolution\Resolved;
+use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\Unresolved;
 
 /**
  * The same adapter method, with the branch handled.

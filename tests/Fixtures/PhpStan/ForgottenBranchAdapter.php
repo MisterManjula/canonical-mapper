@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Tests\Fixtures\PhpStan;
 
-use CanonicalMapper\Canonical\Money;
-use CanonicalMapper\Resolution\Resolved;
-use CanonicalMapper\Resolution\Unresolved;
+use CanonicalMapper\Domain\Canonical\Money;
+use CanonicalMapper\Domain\Resolution\Resolved;
+use CanonicalMapper\Domain\Resolution\Unresolved;
 
 /**
  * An adapter written by someone who did not read the ADR: it resolves the prices
