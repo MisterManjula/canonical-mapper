@@ -24,6 +24,11 @@ use PHPUnit\Framework\TestCase;
  * read here rather than built in the test: three tests asserting against one file
  * is the whole claim, and three tests each constructing their own expectation
  * would be three claims that happen to agree.
+ *
+ * The zero padding and the decimal point are asserted here rather than in the
+ * domain tests, because this adapter is where they are now known about. They are
+ * the same assertions that used to sit on Sku and Money, addressed to the layer
+ * that earns them.
  */
 final class AlphaPosTest extends TestCase
 {
@@ -85,6 +90,112 @@ final class AlphaPosTest extends TestCase
         );
     }
 
+    public function testThePaddingIsStrippedFromThePlu(): void
+    {
+        $item = self::onlyItem(<<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "001204", "name": "Breakfast set", "price": "1.10" }
+                    ]
+                }
+            }
+            JSON);
+
+        // The canonical spelling has no padding, and reaching it is this
+        // adapter's job: the domain refuses "001204" outright. BetaPos writes the
+        // same product as code="1204" and does nothing at all, which is what makes
+        // the two converge.
+        self::assertSame('1204', $item->sku->value, 'The AlphaPos padding survived into the canonical model');
+    }
+
+    public function testTwoSpellingsOfOnePluInOneExportAreOneProduct(): void
+    {
+        $result = (new NormaliseMenu())->run(new AlphaPosAdapter(), <<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "001204", "name": "Breakfast set", "price": "1.10" },
+                        { "plu": "1204", "name": "Breakfast set", "price": "1.10" }
+                    ]
+                }
+            }
+            JSON);
+
+        // Both rows normalise to one SKU, so this is one product described twice
+        // and not two products. They agree, so there is nothing to refuse; a
+        // disagreement is the case the test below covers.
+        self::assertCount(1, $result->menu->items, 'Two spellings of one PLU produced two products');
+    }
+
+    public function testAPluOfNothingButZeroesIsRefusedRatherThanReadAsZero(): void
+    {
+        // Stripping the padding leaves nothing behind. Reading that as SKU 0 would
+        // invent a product out of a field nobody filled in.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new AlphaPosAdapter(), <<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "000000", "name": "Espresso", "price": "1.10" }
+                    ]
+                }
+            }
+            JSON);
+    }
+
+    public function testAGrossDecimalStringBecomesTheNumberOfCentsItNames(): void
+    {
+        $item = self::onlyItem(<<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "000099", "name": "Espresso", "price": "1.10" }
+                    ]
+                }
+            }
+            JSON);
+
+        self::assertSame(110, $item->price->minorUnits, 'An AlphaPos price did not become the number of cents it names');
+    }
+
+    public function testAPriceWithThreeDecimalsIsRefusedInsteadOfRounded(): void
+    {
+        // Three decimals are the only way a decimal string could require a
+        // rounding policy. Refusing them is what makes the absence of one
+        // structural rather than a matter of which fixtures were chosen.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new AlphaPosAdapter(), <<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "000099", "name": "Espresso", "price": "1.505" }
+                    ]
+                }
+            }
+            JSON);
+    }
+
+    public function testAPriceWithOneDecimalIsRefusedInsteadOfPadded(): void
+    {
+        // "1.5" almost certainly means 1.50, and reading it that way would be a
+        // guess. A source has one spelling for a price; a second one is a broken
+        // export, and the point of this project is to say so.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new AlphaPosAdapter(), <<<'JSON'
+            {
+                "menu": {
+                    "products": [
+                        { "plu": "000099", "name": "Espresso", "price": "1.5" }
+                    ]
+                }
+            }
+            JSON);
+    }
+
     public function testADefinitionThatContradictsAnEarlierOneIsRefused(): void
     {
         // AlphaPos repeats a child's full definition inside its parent, so the two
@@ -136,6 +247,24 @@ final class AlphaPosTest extends TestCase
         $this->expectException(MalformedSource::class);
 
         (new NormaliseMenu())->run(new AlphaPosAdapter(), 'PLU;NAME;PRICE');
+    }
+
+    /**
+     * The single item of a one-product export.
+     *
+     * Written as a search rather than an index because a list has no guaranteed
+     * offset 0, which PHPStan is right about and which a test asserting on
+     * $items[0] would only discover once the export had more than one product.
+     */
+    private static function onlyItem(string $json): Item
+    {
+        $result = (new NormaliseMenu())->run(new AlphaPosAdapter(), $json);
+
+        foreach ($result->menu->items as $item) {
+            return $item;
+        }
+
+        self::fail('The export produced no items');
     }
 
     private static function fixture(string $path): string

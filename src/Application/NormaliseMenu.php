@@ -8,6 +8,7 @@ use CanonicalMapper\Application\Port\MalformedSource;
 use CanonicalMapper\Application\Port\SourceAdapter;
 use CanonicalMapper\Domain\Canonical\CanonicalMenu;
 use CanonicalMapper\Domain\Canonical\Item;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Unresolved;
 
@@ -40,6 +41,16 @@ final class NormaliseMenu
             $items[] = $resolution->value;
         }
 
-        return MappingResult::of(CanonicalMenu::of($items), $flags);
+        // The one invariant that cannot be checked one item at a time, and so the
+        // one an adapter cannot check for itself: two products with the same SKU
+        // are only visible once the whole export has been read. The domain refuses
+        // the menu, and the refusal is translated here because this is the layer
+        // that knows the items came out of a file — the domain does not, and
+        // MalformedSource is a statement about a file.
+        try {
+            return MappingResult::of(CanonicalMenu::of($items), $flags);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource($violation->detail);
+        }
     }
 }

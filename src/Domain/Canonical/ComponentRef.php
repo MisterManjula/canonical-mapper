@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Canonical;
 
-use CanonicalMapper\Application\Port\MalformedSource;
+use CanonicalMapper\Domain\InvariantViolated;
 
 /**
  * One line of a composite: which product, and how many of it.
@@ -28,7 +28,7 @@ final class ComponentRef
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function of(Sku $sku, int $quantity): self
     {
@@ -37,7 +37,7 @@ final class ComponentRef
         // rather than as an ambiguity worth asking a human about: there is no
         // question to put to anyone, the row is simply not a line of a recipe.
         if ($quantity < 1) {
-            throw new MalformedSource(sprintf(
+            throw new InvariantViolated(sprintf(
                 'Component %s appears with a quantity of %d.',
                 $sku->value,
                 $quantity,

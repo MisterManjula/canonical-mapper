@@ -132,6 +132,40 @@ final class BetaPosTest extends TestCase
             XML);
     }
 
+    public function testAPaddedCodeIsRefusedRatherThanQuietlyUnpadded(): void
+    {
+        // BetaPos writes code="1204" and never code="0099": this format has no
+        // padding, so a padded code is an export that is not what it claims to
+        // be. It used to be unpadded in silence, back when Sku stripped zeroes
+        // for every source whether or not that source padded.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="0099" name="Espresso" net="100" vat="V10"/>
+            </catalogue>
+            XML);
+    }
+
+    public function testTwoProductsWithOneCodeAreRefusedOnceTheWholeExportIsRead(): void
+    {
+        // The one invariant no adapter can check for itself, because a duplicate
+        // is only visible once every product has been read. The domain refuses
+        // the menu in a sentence that mentions no file, and NormaliseMenu
+        // translates it; that translation is the only reason this arrives as a
+        // MalformedSource rather than as a domain exception escaping the port.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="100" vat="V10"/>
+                <product code="99" name="Espresso" net="100" vat="V10"/>
+            </catalogue>
+            XML);
+    }
+
     public function testAnExportThatIsNotXmlIsRefused(): void
     {
         $this->expectException(MalformedSource::class);

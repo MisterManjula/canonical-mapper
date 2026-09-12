@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Canonical;
 
-use CanonicalMapper\Application\Port\MalformedSource;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\RoundingRequired;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -43,7 +43,7 @@ final class Promotion
     /**
      * BetaPos states the promotional price directly.
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function atPrice(Money $price, string $from, string $to): self
     {
@@ -55,7 +55,7 @@ final class Promotion
      *
      * @param int<0, 100> $percent
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      * @throws RoundingRequired
      */
     public static function percentageOff(Money $basePrice, int $percent, string $from, string $to): self
@@ -76,7 +76,7 @@ final class Promotion
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     private static function over(Money $price, string $from, string $to): self
     {
@@ -84,21 +84,21 @@ final class Promotion
         $end = self::day($to);
 
         if ($start > $end) {
-            throw new MalformedSource(sprintf('Promotion runs from %s to %s, which ends before it starts.', $from, $to));
+            throw new InvariantViolated(sprintf('Promotion runs from %s to %s, which ends before it starts.', $from, $to));
         }
 
         return new self($price, $start, $end);
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     private static function day(string $value): DateTimeImmutable
     {
         $parsed = DateTimeImmutable::createFromFormat(self::DAY_FORMAT, $value, new DateTimeZone('UTC'));
 
         if ($parsed === false) {
-            throw new MalformedSource(sprintf('Promotion date "%s" is not an ISO 8601 date.', $value));
+            throw new InvariantViolated(sprintf('Promotion date "%s" is not an ISO 8601 date.', $value));
         }
 
         // createFromFormat is forgiving in a way that would quietly change the
@@ -106,7 +106,7 @@ final class Promotion
         // round trip is what rejects it. Without this, a typo in a date would
         // silently move a promotion rather than be reported.
         if ($parsed->format('Y-m-d') !== $value) {
-            throw new MalformedSource(sprintf('Promotion date "%s" is not a real date.', $value));
+            throw new InvariantViolated(sprintf('Promotion date "%s" is not a real date.', $value));
         }
 
         return $parsed;

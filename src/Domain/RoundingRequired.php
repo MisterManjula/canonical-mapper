@@ -14,7 +14,7 @@ use LogicException;
  * correct answers to a question nobody here has been asked, and choosing one
  * silently would put an invented cent into a customer-facing price.
  *
- * So it is raised, and — unlike MalformedSource — it is a LogicException that
+ * So it is raised, and — unlike InvariantViolated — it is a LogicException that
  * the CLI does not catch. Reaching it does not mean a bad file arrived; it means
  * the claim that these formats never require rounding is false, which is a
  * defect in this codebase's assumptions. A stack trace is the honest report for

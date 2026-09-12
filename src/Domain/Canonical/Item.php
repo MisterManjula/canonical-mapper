@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Canonical;
 
-use CanonicalMapper\Application\Port\MalformedSource;
+use CanonicalMapper\Domain\InvariantViolated;
 
 /**
  * One product on the menu, with exactly one determinable price.
@@ -35,7 +35,7 @@ final class Item
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function simple(Sku $sku, string $name, Money $price, ?Promotion $promotion = null): self
     {
@@ -50,7 +50,7 @@ final class Item
      *
      * @param non-empty-list<ComponentRef> $components
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function composite(
         Sku $sku,
@@ -67,7 +67,7 @@ final class Item
      *
      * @return non-empty-list<ComponentRef>
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     private static function sorted(array $components, Sku $sku): array
     {
@@ -79,7 +79,7 @@ final class Item
             // cases there is no question to put to a human that the export has
             // not already answered twice.
             if (isset($seen[$component->sku->value])) {
-                throw new MalformedSource(sprintf(
+                throw new InvariantViolated(sprintf(
                     'Composite %s lists component %s more than once.',
                     $sku->value,
                     $component->sku->value,
@@ -95,14 +95,14 @@ final class Item
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     private static function name(string $name, Sku $sku): string
     {
         $trimmed = trim($name);
 
         if ($trimmed === '') {
-            throw new MalformedSource(sprintf('Product %s has no name.', $sku->value));
+            throw new InvariantViolated(sprintf('Product %s has no name.', $sku->value));
         }
 
         return $trimmed;

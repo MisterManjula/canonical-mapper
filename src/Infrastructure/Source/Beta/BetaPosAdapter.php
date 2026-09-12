@@ -10,6 +10,7 @@ use CanonicalMapper\Domain\Canonical\ComponentRef;
 use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Resolved;
 use CanonicalMapper\Domain\Resolution\SourceSystem;
@@ -27,6 +28,12 @@ use LibXMLError;
  * outside the file: what the code means. That is where this source can fail to
  * resolve while remaining perfectly well formed, and it is the reason the
  * Resolution type exists.
+ *
+ * This format's contribution to a SKU is that it makes none: a code attribute is
+ * already the digits the canonical model wants. The adapter still hands it to
+ * the domain rather than trusting it, and a padded code is refused here where it
+ * used to be quietly unpadded — BetaPos writes code="1204" and never code="0099",
+ * so the second is an export that is not what it claims to be.
  *
  * Composites are stated as a list of component elements on the parent, and a
  * component carries nothing but a code and a quantity. Unlike the nested source,
@@ -74,18 +81,42 @@ final class BetaPosAdapter implements SourceAdapter
     }
 
     /**
+     * Reads one product, and is where a broken domain invariant becomes a broken
+     * export.
+     *
+     * The canonical types refuse a blank name, a quantity of zero and a recipe
+     * that lists a child twice, in wording that mentions no file because the
+     * model has never seen one. Naming the product element that carried the
+     * offending value is something only this layer can do.
+     *
      * @return Resolved<Item>|Unresolved
      *
      * @throws MalformedSource
      */
     private static function product(DOMElement $element): Resolved|Unresolved
     {
+        $context = sprintf('product code="%s"', $element->getAttribute('code'));
+
+        try {
+            return self::readProduct($element, $context);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource(sprintf('%s: %s', $context, $violation->detail));
+        }
+    }
+
+    /**
+     * @return Resolved<Item>|Unresolved
+     *
+     * @throws MalformedSource
+     * @throws InvariantViolated
+     */
+    private static function readProduct(DOMElement $element, string $context): Resolved|Unresolved
+    {
         $code = self::attribute($element, 'code', 'product');
-        $context = sprintf('product code="%s"', $code);
 
         self::rejectUnknownAttributes($element, self::PRODUCT_ATTRIBUTES, $context);
 
-        $sku = Sku::fromAttribute($code);
+        $sku = self::sku($code, $context);
         $name = self::attribute($element, 'name', $context);
 
         $components = [];
@@ -95,7 +126,7 @@ final class BetaPosAdapter implements SourceAdapter
             self::rejectUnknownAttributes($component, self::COMPONENT_ATTRIBUTES, $componentContext);
 
             $components[] = ComponentRef::of(
-                Sku::fromAttribute(self::attribute($component, 'code', $componentContext)),
+                self::sku(self::attribute($component, 'code', $componentContext), $componentContext),
                 self::wholeNumber(self::attribute($component, 'qty', $componentContext), $componentContext . ' qty'),
             );
         }
@@ -122,15 +153,34 @@ final class BetaPosAdapter implements SourceAdapter
     }
 
     /**
+     * BetaPos writes the PLU as an XML attribute with no padding: code="1204".
+     *
+     * There is nothing to strip, which is the point: the same canonical
+     * constructor serves a format that pads and a format that does not, and
+     * neither of them is named in it.
+     *
+     * @throws MalformedSource
+     */
+    private static function sku(string $code, string $context): Sku
+    {
+        try {
+            return Sku::ofDigits($code);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource(sprintf('%s: %s', $context, $violation->detail));
+        }
+    }
+
+    /**
      * @return Resolved<Money>|Unresolved
      *
      * @throws MalformedSource
+     * @throws InvariantViolated
      */
     private static function price(DOMElement $element, string $code, Sku $sku, string $context): Resolved|Unresolved
     {
         $vat = self::attribute($element, 'vat', $context);
 
-        // Read before the rate is looked up, for the reason given in product():
+        // Read before the rate is looked up, for the reason given in readProduct():
         // a net price that is not a number is a broken export either way.
         $net = self::wholeNumber(self::attribute($element, 'net', $context), $context . ' net');
 

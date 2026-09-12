@@ -10,6 +10,7 @@ use CanonicalMapper\Domain\Canonical\ComponentRef;
 use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Resolved;
 use CanonicalMapper\Domain\Resolution\SourceSystem;
 use CanonicalMapper\Domain\Resolution\Unresolved;
@@ -17,6 +18,11 @@ use JsonException;
 
 /**
  * Reads the AlphaPos JSON export.
+ *
+ * Everything this format does with punctuation lives here: the zero padding on a
+ * PLU, and the dot between units and cents. The canonical model is handed the
+ * result — a run of digits, and a number of minor units — and would be handed
+ * exactly the same thing by a source that wrote neither.
  *
  * AlphaPos expresses a composite by nesting its children's full definitions
  * inside the parent, so a product that is both sold on its own and used in a set
@@ -79,6 +85,16 @@ final class AlphaPosAdapter implements SourceAdapter
     }
 
     /**
+     * Reads one product, and is where a broken domain invariant becomes a broken
+     * export.
+     *
+     * The canonical types refuse a quantity of zero, a name that is blank and a
+     * recipe that lists a child twice, and they refuse them in the vocabulary of
+     * the model, which mentions no file and no path. Only this layer knows which
+     * entry of which export was being read, so only this layer can turn the one
+     * into the other. The helpers below translate the same exception for the two
+     * values whose wording is worth keeping sharper than a whole product.
+     *
      * @param array<string, Item> $defined
      *
      * @return array<string, Item>
@@ -87,12 +103,32 @@ final class AlphaPosAdapter implements SourceAdapter
      */
     private static function product(array $defined, mixed $entry, string $context): array
     {
+        try {
+            return self::readProduct($defined, $entry, $context);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource(sprintf('%s: %s', $context, $violation->detail));
+        }
+    }
+
+    /**
+     * @param array<string, Item> $defined
+     *
+     * @return array<string, Item>
+     *
+     * @throws MalformedSource
+     * @throws InvariantViolated
+     */
+    private static function readProduct(array $defined, mixed $entry, string $context): array
+    {
         $product = self::object($entry, $context);
         self::rejectUnknownKeys($product, self::PRODUCT_KEYS, $context);
 
-        $sku = Sku::fromPaddedString(self::text(self::field($product, 'plu', $context), $context . '.plu'));
+        $sku = self::sku(self::text(self::field($product, 'plu', $context), $context . '.plu'), $context . '.plu');
         $name = self::text(self::field($product, 'name', $context), $context . '.name');
-        $price = Money::fromDecimalString(self::text(self::field($product, 'price', $context), $context . '.price'));
+        $price = self::money(
+            self::text(self::field($product, 'price', $context), $context . '.price'),
+            $context . '.price',
+        );
 
         if (!array_key_exists('components', $product)) {
             return self::define($defined, Item::simple($sku, $name, $price), $context);
@@ -105,7 +141,10 @@ final class AlphaPosAdapter implements SourceAdapter
             $child = self::object($entry, $childContext);
             self::rejectUnknownKeys($child, self::COMPONENT_KEYS, $childContext);
 
-            $childSku = Sku::fromPaddedString(self::text(self::field($child, 'plu', $childContext), $childContext . '.plu'));
+            $childSku = self::sku(
+                self::text(self::field($child, 'plu', $childContext), $childContext . '.plu'),
+                $childContext . '.plu',
+            );
 
             // The nested copy is a definition of the child in its own right, so it
             // is emitted as an item as well as referenced. This is where the two
@@ -114,7 +153,10 @@ final class AlphaPosAdapter implements SourceAdapter
             $defined = self::define($defined, Item::simple(
                 $childSku,
                 self::text(self::field($child, 'name', $childContext), $childContext . '.name'),
-                Money::fromDecimalString(self::text(self::field($child, 'price', $childContext), $childContext . '.price')),
+                self::money(
+                    self::text(self::field($child, 'price', $childContext), $childContext . '.price'),
+                    $childContext . '.price',
+                ),
             ), $childContext);
 
             $components[] = ComponentRef::of(
@@ -128,6 +170,71 @@ final class AlphaPosAdapter implements SourceAdapter
         }
 
         return self::define($defined, Item::composite($sku, $name, $price, $components), $context);
+    }
+
+    /**
+     * AlphaPos writes the PLU as a zero-padded JSON string: "001204".
+     *
+     * Stripping the padding is this adapter's whole contribution to the identity
+     * of a product; what is left has to be a product identifier, and the domain
+     * is what says whether it is. The padding used to be stripped inside Sku,
+     * which meant the canonical model knew that one of three formats pads.
+     *
+     * @throws MalformedSource
+     */
+    private static function sku(string $plu, string $context): Sku
+    {
+        $digits = ltrim($plu, '0');
+
+        // ltrim leaves nothing behind when every digit was a zero. Reading that as
+        // SKU 0 would invent a product; it is a padded field nobody filled in, and
+        // saying so is better than reporting the empty string the domain would see.
+        if ($digits === '') {
+            throw new MalformedSource(sprintf('%s "%s" is entirely zeroes.', $context, $plu));
+        }
+
+        try {
+            return Sku::ofDigits($digits);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource(sprintf('%s "%s": %s', $context, $plu, $violation->detail));
+        }
+    }
+
+    /**
+     * AlphaPos writes gross prices as a decimal string with a dot: "1.50".
+     *
+     * Exactly two decimals, no more and no fewer. "1.5" is rejected rather than
+     * read as 1.50, and "1.505" rejected rather than rounded. Three decimals are
+     * the only way a decimal string could require a rounding policy, so refusing
+     * them is what makes the absence of one structural instead of a matter of
+     * luck. And a source has exactly one spelling for a price: accepting a second
+     * one would weaken what the byte-identical output proves, from "three formats
+     * were reconciled" to "three formats were shrugged at".
+     *
+     * @throws MalformedSource
+     */
+    private static function money(string $value, string $context): Money
+    {
+        if (preg_match('/^\d{1,10}\.\d{2}$/', $value) !== 1) {
+            throw new MalformedSource(sprintf(
+                '%s "%s" is not an amount with exactly two decimals separated by ".".',
+                $context,
+                $value,
+            ));
+        }
+
+        // The pattern above fixes the shape, so the last two characters are the
+        // cents and everything before the separator is the units. Taken by
+        // position rather than by splitting, which keeps both halves plain
+        // strings instead of offsets that would then have to be proved to exist.
+        $units = substr($value, 0, -3);
+        $cents = substr($value, -2);
+
+        try {
+            return Money::fromMinorUnits((int) $units * 100 + (int) $cents);
+        } catch (InvariantViolated $violation) {
+            throw new MalformedSource(sprintf('%s "%s": %s', $context, $value, $violation->detail));
+        }
     }
 
     /**

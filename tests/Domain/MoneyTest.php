@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Tests\Domain;
 
-use CanonicalMapper\Application\Port\MalformedSource;
 use CanonicalMapper\Domain\Canonical\Money;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\RoundingRequired;
 use PHPUnit\Framework\TestCase;
 
 /**
  * The equivalence guarantee at the smallest scale there is.
  *
- * Three sources spell one price three ways, and if they do not converge here they
- * cannot converge on a whole menu. These tests are therefore the cross-source
- * equivalence test in miniature, which is why they exist even though the README
- * does not list them.
+ * Two sources spell one price two different ways and have to converge, and if
+ * they do not converge here they cannot converge on a whole menu. The third
+ * spelling used to be asserted here too; reading punctuation is an adapter's
+ * job now, so the decimal cases live in AlphaPosTest and the comma ones arrive
+ * with GammaPos.
+ *
+ * What is left is the arithmetic, which stayed in the domain because it is a
+ * rule about what a price means rather than about how a file writes one.
  *
  * The rest of the file is about the rounding policy this project does not have.
  * Every one of those tests asserts that something is refused — the value of "no
@@ -24,15 +28,6 @@ use PHPUnit\Framework\TestCase;
  */
 final class MoneyTest extends TestCase
 {
-    public function testAGrossDecimalStringBecomesMinorUnits(): void
-    {
-        self::assertSame(
-            110,
-            Money::fromDecimalString('1.10')->minorUnits,
-            'An AlphaPos price did not become the number of cents it names',
-        );
-    }
-
     public function testNetMinorUnitsAndAKnownVatRateBecomeTheGrossPrice(): void
     {
         self::assertSame(
@@ -42,34 +37,19 @@ final class MoneyTest extends TestCase
         );
     }
 
-    public function testTheThreeSourceSpellingsOfOnePriceProduceOneMoney(): void
+    public function testAPriceReadAsGrossAndAPriceComputedFromNetAgree(): void
     {
-        $alpha = Money::fromDecimalString('1.10');
-        $beta = Money::fromNetMinorUnitsAndVatPercent(100, 10);
-        $gamma = Money::fromCommaDecimalString('1,10');
+        // One source states 1.10 and the other states 100 net at 10%. The model
+        // holds one number either way, which is the whole of the equivalence
+        // guarantee expressed on a single value.
+        $stated = Money::fromMinorUnits(110);
+        $computed = Money::fromNetMinorUnitsAndVatPercent(100, 10);
 
-        self::assertSame($alpha->minorUnits, $beta->minorUnits, 'AlphaPos and BetaPos disagree about one price');
-        self::assertSame($alpha->minorUnits, $gamma->minorUnits, 'AlphaPos and GammaPos disagree about one price');
-    }
-
-    public function testAPriceWithThreeDecimalsIsRejectedInsteadOfRounded(): void
-    {
-        // Three decimals are the only way a decimal string could require a
-        // rounding policy. Refusing them is what makes the absence of one
-        // structural rather than a matter of which fixtures were chosen.
-        $this->expectException(MalformedSource::class);
-
-        Money::fromDecimalString('1.505');
-    }
-
-    public function testAPriceWithOneDecimalIsRejectedInsteadOfPadded(): void
-    {
-        // "1.5" almost certainly means 1.50, and reading it that way would be a
-        // guess. A source has one spelling for a price; a second one is a broken
-        // export, and the point of this project is to say so.
-        $this->expectException(MalformedSource::class);
-
-        Money::fromDecimalString('1.5');
+        self::assertSame(
+            $stated->minorUnits,
+            $computed->minorUnits,
+            'A stated gross price and a computed one disagree',
+        );
     }
 
     public function testAVatConversionThatWouldNeedRoundingRaisesRatherThanRounds(): void
@@ -95,7 +75,7 @@ final class MoneyTest extends TestCase
     {
         self::assertSame(
             120,
-            Money::fromDecimalString('1.50')->lessPercentage(20)->minorUnits,
+            Money::fromMinorUnits(150)->lessPercentage(20)->minorUnits,
             '20% off 1.50 did not produce 1.20',
         );
     }
@@ -105,12 +85,12 @@ final class MoneyTest extends TestCase
         $this->expectException(RoundingRequired::class);
 
         // 15% off 110 is 93.5 cents.
-        Money::fromDecimalString('1.10')->lessPercentage(15);
+        Money::fromMinorUnits(110)->lessPercentage(15);
     }
 
     public function testANegativePriceIsRejected(): void
     {
-        $this->expectException(MalformedSource::class);
+        $this->expectException(InvariantViolated::class);
 
         Money::fromMinorUnits(-1);
     }

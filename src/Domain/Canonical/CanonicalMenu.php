@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Canonical;
 
-use CanonicalMapper\Application\Port\MalformedSource;
+use CanonicalMapper\Domain\InvariantViolated;
 
 /**
  * The whole assortment, in canonical order.
@@ -31,7 +31,7 @@ final class CanonicalMenu
     /**
      * @param list<Item> $items
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function of(array $items): self
     {
@@ -42,7 +42,7 @@ final class CanonicalMenu
             // the same question twice, and the invariant this model is built on
             // is that every item has exactly one determinable price.
             if (isset($seen[$item->sku->value])) {
-                throw new MalformedSource(sprintf('Product %s appears more than once.', $item->sku->value));
+                throw new InvariantViolated(sprintf('Product %s appears more than once.', $item->sku->value));
             }
 
             $seen[$item->sku->value] = true;

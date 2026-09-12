@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Tests\Domain;
 
-use CanonicalMapper\Application\Port\MalformedSource;
 use CanonicalMapper\Domain\Canonical\CanonicalMenu;
 use CanonicalMapper\Domain\Canonical\ComponentRef;
 use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
+use CanonicalMapper\Domain\InvariantViolated;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -41,12 +41,12 @@ final class CanonicalMenuTest extends TestCase
     public function testComponentsAreSortedBySkuInsideTheItem(): void
     {
         $composite = Item::composite(
-            Sku::fromAttribute('1204'),
+            Sku::ofDigits('1204'),
             'Breakfast set',
-            Money::fromDecimalString('3.05'),
+            Money::fromMinorUnits(305),
             [
-                ComponentRef::of(Sku::fromAttribute('1100'), 1),
-                ComponentRef::of(Sku::fromAttribute('99'), 1),
+                ComponentRef::of(Sku::ofDigits('1100'), 1),
+                ComponentRef::of(Sku::ofDigits('99'), 1),
             ],
         );
 
@@ -57,37 +57,41 @@ final class CanonicalMenuTest extends TestCase
         );
     }
 
-    public function testTheSameProductSpelledTwoWaysIsStillOneProduct(): void
+    public function testOneProductListedTwiceIsRejectedRatherThanPricedTwice(): void
     {
-        // The padded and unpadded spellings normalise to the same SKU, so this is
-        // one product listed twice rather than two products. Reading it any other
-        // way would put two prices on one item and break the invariant the whole
-        // model rests on.
-        $this->expectException(MalformedSource::class);
+        // Two spellings of one PLU reach this point as one SKU, because erasing
+        // the difference is the adapter's job and it has already been done. What
+        // is left for the model is the consequence: the export answered the same
+        // question twice, and an item with two prices breaks the invariant the
+        // whole model rests on.
+        //
+        // That the two spellings do converge is asserted where the converting
+        // happens, in AlphaPosTest.
+        $this->expectException(InvariantViolated::class);
 
         CanonicalMenu::of([
-            self::item('001204', 'Breakfast set'),
+            self::item('1204', 'Breakfast set'),
             self::item('1204', 'Breakfast set'),
         ]);
     }
 
     public function testAComponentListedTwiceLeavesTheRecipeAmbiguousAndIsRejected(): void
     {
-        $this->expectException(MalformedSource::class);
+        $this->expectException(InvariantViolated::class);
 
         Item::composite(
-            Sku::fromAttribute('1204'),
+            Sku::ofDigits('1204'),
             'Breakfast set',
-            Money::fromDecimalString('3.05'),
+            Money::fromMinorUnits(305),
             [
-                ComponentRef::of(Sku::fromAttribute('99'), 1),
-                ComponentRef::of(Sku::fromAttribute('99'), 2),
+                ComponentRef::of(Sku::ofDigits('99'), 1),
+                ComponentRef::of(Sku::ofDigits('99'), 2),
             ],
         );
     }
 
     private static function item(string $plu, string $name): Item
     {
-        return Item::simple(Sku::fromPaddedString($plu), $name, Money::fromDecimalString('1.10'));
+        return Item::simple(Sku::ofDigits($plu), $name, Money::fromMinorUnits(110));
     }
 }

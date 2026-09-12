@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Canonical;
 
-use CanonicalMapper\Application\Port\MalformedSource;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\RoundingRequired;
 
 /**
@@ -13,6 +13,16 @@ use CanonicalMapper\Domain\RoundingRequired;
  * Never a float. Money in floating point is wrong in a way that stays hidden
  * until a total is compared for equality, and the equivalence guarantee here is
  * exactly such a comparison.
+ *
+ * Minor units are the only way in. Reading "1.50" or "1,50" is a fact about a
+ * file and belongs to whichever adapter meets that file; this class would have
+ * needed one parser per separator, which is one per source, which is the
+ * arrangement that made a decimal point a concept in the domain.
+ *
+ * Tax arithmetic stayed, and the line between the two is worth stating: turning
+ * "1,50" into 150 is transcription, and turning a net 100 at 10% into a gross
+ * 110 is a rule about what a price means. One of them changes if a source
+ * changes its mind about punctuation; the other changes if the business does.
  *
  * Always gross, including tax, whatever the source stores (ADR-002). One of the
  * three sources keeps net prices and a tax code; converting on the way in rather
@@ -41,39 +51,19 @@ final class Money
     }
 
     /**
-     * @throws MalformedSource
+     * @throws InvariantViolated
      */
     public static function fromMinorUnits(int $minorUnits): self
     {
         if ($minorUnits < 0) {
-            throw new MalformedSource(sprintf('A price of %d minor units is negative.', $minorUnits));
+            throw new InvariantViolated(sprintf('A price of %d minor units is negative.', $minorUnits));
         }
 
         if ($minorUnits > self::MAXIMUM_MINOR_UNITS) {
-            throw new MalformedSource(sprintf('A price of %d minor units is not a menu price.', $minorUnits));
+            throw new InvariantViolated(sprintf('A price of %d minor units is not a menu price.', $minorUnits));
         }
 
         return new self($minorUnits);
-    }
-
-    /**
-     * AlphaPos writes gross prices as a decimal string with a dot: "1.50".
-     *
-     * @throws MalformedSource
-     */
-    public static function fromDecimalString(string $value): self
-    {
-        return self::fromSeparatedDecimal($value, '.', 'AlphaPos price');
-    }
-
-    /**
-     * GammaPos writes gross prices as a decimal string with a comma: "1,50".
-     *
-     * @throws MalformedSource
-     */
-    public static function fromCommaDecimalString(string $value): self
-    {
-        return self::fromSeparatedDecimal($value, ',', 'GammaPos price');
     }
 
     /**
@@ -86,7 +76,7 @@ final class Money
      *
      * @param int<0, 100> $vatPercent
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      * @throws RoundingRequired
      */
     public static function fromNetMinorUnitsAndVatPercent(int $netMinorUnits, int $vatPercent): self
@@ -113,7 +103,7 @@ final class Money
      *
      * @param int<0, 100> $percent
      *
-     * @throws MalformedSource
+     * @throws InvariantViolated
      * @throws RoundingRequired
      */
     public function lessPercentage(int $percent): self
@@ -125,42 +115,5 @@ final class Money
         }
 
         return self::fromMinorUnits(intdiv($remainingInHundredths, 100));
-    }
-
-    /**
-     * Exactly two decimals, no more and no fewer, and the separator fixed per
-     * source.
-     *
-     * "1.5" is rejected rather than read as 1.50, and "1.505" rejected rather
-     * than rounded. Three decimals are the only way a decimal string could
-     * require a rounding policy, so refusing them is what makes the absence of
-     * one structural instead of a matter of luck. And a source has exactly one
-     * spelling for a price: accepting a second one would weaken what the
-     * byte-identical output proves, from "three formats were reconciled" to
-     * "three formats were shrugged at".
-     *
-     * @throws MalformedSource
-     */
-    private static function fromSeparatedDecimal(string $value, string $separator, string $source): self
-    {
-        $pattern = '/^\d{1,10}' . preg_quote($separator, '/') . '\d{2}$/';
-
-        if (preg_match($pattern, $value) !== 1) {
-            throw new MalformedSource(sprintf(
-                '%s "%s" is not an amount with exactly two decimals separated by "%s".',
-                $source,
-                $value,
-                $separator,
-            ));
-        }
-
-        // The pattern above fixes the shape, so the last two characters are the
-        // cents and everything before the separator is the units. Taken by
-        // position rather than by splitting, which keeps both halves plain
-        // strings instead of offsets that would then have to be proved to exist.
-        $units = substr($value, 0, -3);
-        $cents = substr($value, -2);
-
-        return self::fromMinorUnits((int) $units * 100 + (int) $cents);
     }
 }

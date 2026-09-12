@@ -63,7 +63,7 @@ final class ResolutionTest extends TestCase
 
     public function testAFlagNamesTheSystemTheProductAndTheValueToCheck(): void
     {
-        $flag = Flag::taxBasisUnknown(SourceSystem::Beta, '001204', Sku::fromAttribute('1204'), 'V99');
+        $flag = Flag::taxBasisUnknown(SourceSystem::Beta, '001204', Sku::ofDigits('1204'), 'V99');
 
         // A flag is a work item. Each of these is something the person acting on
         // it needs: the system to open, the identifier to paste into its search
@@ -75,7 +75,7 @@ final class ResolutionTest extends TestCase
 
     public function testTheSourceProductIdIsTheRawSpellingAndNotTheNormalisedOne(): void
     {
-        $flag = Flag::componentMissing(SourceSystem::Gamma, 'P-1204', Sku::fromPrefixedColumn('P-1204'), 'P-1210');
+        $flag = Flag::componentMissing(SourceSystem::Gamma, 'P-1204', Sku::ofDigits('1204'), 'P-1210');
 
         // Searching GammaPos for "1204" may well find nothing: the prefix is how
         // that system spells the identifier, and the flag is read over there.
