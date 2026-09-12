@@ -6,10 +6,11 @@ namespace CanonicalMapper\Tests\Domain;
 
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
+use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\FlagReason;
 use CanonicalMapper\Domain\Resolution\Resolved;
-use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
 use PHPUnit\Framework\TestCase;
 
@@ -63,7 +64,7 @@ final class ResolutionTest extends TestCase
 
     public function testAFlagNamesTheSystemTheProductAndTheValueToCheck(): void
     {
-        $flag = Flag::taxBasisUnknown(SourceSystem::Beta, '001204', Sku::ofDigits('1204'), 'V99');
+        $flag = Flag::taxBasisUnknown(SourceName::of('BetaPos'), '001204', Sku::ofDigits('1204'), 'V99');
 
         // A flag is a work item. Each of these is something the person acting on
         // it needs: the system to open, the identifier to paste into its search
@@ -75,12 +76,23 @@ final class ResolutionTest extends TestCase
 
     public function testTheSourceProductIdIsTheRawSpellingAndNotTheNormalisedOne(): void
     {
-        $flag = Flag::componentMissing(SourceSystem::Gamma, 'P-1204', Sku::ofDigits('1204'), 'P-1210');
+        $flag = Flag::componentMissing(SourceName::of('GammaPos'), 'P-1204', Sku::ofDigits('1204'), 'P-1210');
 
         // Searching GammaPos for "1204" may well find nothing: the prefix is how
         // that system spells the identifier, and the flag is read over there.
         self::assertSame('P-1204', $flag->sourceProductId, 'The flag normalised an id that has to stay searchable');
         self::assertSame('1204', $flag->sku?->value, 'The flag lost the canonical SKU');
+    }
+
+    public function testASourceNameCannotBeBlank(): void
+    {
+        // The name is the first question a flag answers: where do I go to do
+        // this? A blank one turns a work item into a note that something went
+        // wrong somewhere, which is the kind of report withholding is supposed
+        // to be better than.
+        $this->expectException(InvariantViolated::class);
+
+        SourceName::of('   ');
     }
 
     /**
@@ -99,7 +111,7 @@ final class ResolutionTest extends TestCase
 
         if ($rate === null) {
             return Unresolved::because(
-                Flag::taxBasisUnknown(SourceSystem::Beta, $sourceProductId, null, $vatCode),
+                Flag::taxBasisUnknown(SourceName::of('BetaPos'), $sourceProductId, null, $vatCode),
             );
         }
 

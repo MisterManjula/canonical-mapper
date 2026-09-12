@@ -17,10 +17,10 @@ use RuntimeException;
  * the model's.
  *
  * So the wording here describes the rule that was broken and never the format
- * that broke it: "a product identifier must be a sequence of digits", not
- * "AlphaPos plu is not a sequence of digits". The adapter catches this and
- * rethrows it as MalformedSource with the path and the raw text it alone can
- * supply, which is also why the two messages read better together than either
+ * that broke it: "a product identifier must be a sequence of digits", and
+ * never the name of a format or the path of a field. The adapter catches this
+ * and rethrows it as MalformedSource with the path and the raw text it alone
+ * can supply, which is why the two messages read better together than either
  * did alone.
  *
  * Distinct from RoundingRequired, which is a LogicException and stays one. That

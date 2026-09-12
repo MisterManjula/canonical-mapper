@@ -67,8 +67,8 @@ final class Money
     }
 
     /**
-     * BetaPos writes net prices in minor units alongside a VAT code, so the gross
-     * price the canonical model stores has to be computed rather than read.
+     * A source that keeps net prices alongside a tax code leaves the gross price
+     * the canonical model stores to be computed rather than read.
      *
      * Resolving the code to a rate is the adapter's job; by the time a value
      * reaches here the rate is known, and the only remaining question is whether
@@ -98,8 +98,8 @@ final class Money
     }
 
     /**
-     * AlphaPos states promotions as a percentage off rather than as a price, so
-     * the promotional price has to be computed the same way.
+     * A source that states a promotion as a percentage off rather than as a price
+     * leaves the promotional price to be computed the same way.
      *
      * @param int<0, 100> $percent
      *

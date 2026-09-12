@@ -41,7 +41,7 @@ final class Promotion
     }
 
     /**
-     * BetaPos states the promotional price directly.
+     * For a source that states the promotional price directly.
      *
      * @throws InvariantViolated
      */
@@ -51,7 +51,7 @@ final class Promotion
     }
 
     /**
-     * AlphaPos states a percentage off the usual price.
+     * For a source that states a percentage off the usual price.
      *
      * @param int<0, 100> $percent
      *

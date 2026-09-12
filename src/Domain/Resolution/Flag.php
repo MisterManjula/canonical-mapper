@@ -22,13 +22,18 @@ use CanonicalMapper\Domain\Canonical\Sku;
  * and it is nullable because some failures happen before an identifier can be
  * normalised at all.
  *
+ * $source is a name, not a choice from a list. The adapter supplies it, because
+ * the adapter is the only thing in this project that knows which system it has
+ * been reading; the sentences below name a system to open without this class
+ * ever having been told which systems exist, or how many.
+ *
  * There is one named constructor per reason, so that the wording of the sentence
  * lives beside the case it belongs to and the two cannot drift apart.
  */
 final class Flag
 {
     private function __construct(
-        public readonly SourceSystem $source,
+        public readonly SourceName $source,
         public readonly string $sourceProductId,
         public readonly ?Sku $sku,
         public readonly FlagReason $reason,
@@ -37,7 +42,7 @@ final class Flag
     }
 
     public static function taxBasisUnknown(
-        SourceSystem $source,
+        SourceName $source,
         string $sourceProductId,
         ?Sku $sku,
         string $vatCode,
@@ -54,13 +59,13 @@ final class Flag
                 $sourceProductId,
                 $vatCode,
                 $vatCode,
-                $source->displayName(),
+                $source->value,
             ),
         );
     }
 
     public static function componentMissing(
-        SourceSystem $source,
+        SourceName $source,
         string $sourceProductId,
         ?Sku $sku,
         string $missingComponentId,
@@ -77,13 +82,13 @@ final class Flag
                 $sourceProductId,
                 $missingComponentId,
                 $missingComponentId,
-                $source->displayName(),
+                $source->value,
             ),
         );
     }
 
     public static function promotionConflict(
-        SourceSystem $source,
+        SourceName $source,
         string $sourceProductId,
         ?Sku $sku,
         string $overlappingPeriod,
@@ -99,7 +104,7 @@ final class Flag
                 . 'promotion applies and shorten the other.',
                 $sourceProductId,
                 $overlappingPeriod,
-                $source->displayName(),
+                $source->value,
             ),
         );
     }

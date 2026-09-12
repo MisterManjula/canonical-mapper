@@ -6,7 +6,7 @@ namespace CanonicalMapper\Application\Port;
 
 use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Resolution\Resolved;
-use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
 
 /**
@@ -29,7 +29,7 @@ use CanonicalMapper\Domain\Resolution\Unresolved;
  */
 interface SourceAdapter
 {
-    public function system(): SourceSystem;
+    public function sourceName(): SourceName;
 
     /**
      * @return list<Resolved<Item>|Unresolved>

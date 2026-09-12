@@ -7,7 +7,7 @@ namespace CanonicalMapper\Tests\Fixtures\PhpStan;
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Resolved;
-use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
 
 /**
@@ -29,7 +29,7 @@ final class HandledBranchAdapter
 
         if ($rate === null) {
             return Unresolved::because(
-                Flag::taxBasisUnknown(SourceSystem::Beta, $sourceProductId, null, $vatCode),
+                Flag::taxBasisUnknown(SourceName::of('BetaPos'), $sourceProductId, null, $vatCode),
             );
         }
 

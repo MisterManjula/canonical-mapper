@@ -12,8 +12,9 @@ use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
 use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Resolved;
-use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
+use CanonicalMapper\Infrastructure\Source\SourceSystem;
 use JsonException;
 
 /**
@@ -48,9 +49,9 @@ final class AlphaPosAdapter implements SourceAdapter
 
     private const COMPONENT_KEYS = ['plu', 'name', 'price', 'quantity'];
 
-    public function system(): SourceSystem
+    public function sourceName(): SourceName
     {
-        return SourceSystem::Alpha;
+        return SourceSystem::Alpha->sourceName();
     }
 
     /**

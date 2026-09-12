@@ -13,8 +13,9 @@ use CanonicalMapper\Domain\Canonical\Sku;
 use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Resolved;
-use CanonicalMapper\Domain\Resolution\SourceSystem;
+use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
+use CanonicalMapper\Infrastructure\Source\SourceSystem;
 use DOMDocument;
 use DOMElement;
 use LibXMLError;
@@ -53,9 +54,9 @@ final class BetaPosAdapter implements SourceAdapter
 
     private const COMPONENT_ATTRIBUTES = ['code', 'qty'];
 
-    public function system(): SourceSystem
+    public function sourceName(): SourceName
     {
-        return SourceSystem::Beta;
+        return SourceSystem::Beta->sourceName();
     }
 
     /**
@@ -191,7 +192,7 @@ final class BetaPosAdapter implements SourceAdapter
             // The file is fine; the question is what this code means, and it is
             // one a person can answer in BetaPos in under a minute. Defaulting to
             // the commoner rate would publish a price nobody chose.
-            return Unresolved::because(Flag::taxBasisUnknown(SourceSystem::Beta, $code, $sku, $vat));
+            return Unresolved::because(Flag::taxBasisUnknown(SourceSystem::Beta->sourceName(), $code, $sku, $vat));
         }
 
         return Resolved::of(Money::fromNetMinorUnitsAndVatPercent($net, $rate));
