@@ -108,7 +108,7 @@ final class GammaPosTest extends TestCase
         );
     }
 
-    public function testTheFlagNamesTheCompositeAndTheComponentAsTheFileSpellsThem(): void
+    public function testTheFlagNamesTheCompositeAndTheComponentInCanonicalSpelling(): void
     {
         $result = (new NormaliseMenu())->run(new GammaPosAdapter(), <<<'CSV'
             PLU;NAME;PRICE;PARENT_PLU;QTY
@@ -119,10 +119,20 @@ final class GammaPosTest extends TestCase
         $details = array_map(static fn (Flag $flag): string => $flag->detail, $result->flags);
         $ids = array_map(static fn (Flag $flag): string => $flag->sourceProductId, $result->flags);
 
-        // Searching GammaPos for "1310" may well find nothing: the prefix is how
-        // that system spells an identifier, and the flag is read over there.
-        self::assertSame(['P-1310'], $ids, 'The flag did not quote the composite as the source wrote it');
-        self::assertStringContainsString('P-1210', $details[0] ?? '', 'The flag did not name the missing component');
+        // This used to read ['P-1310'], and the test used to be named for it:
+        // the prefix is how GammaPos spells an identifier, the flag is read over
+        // there, and searching that system for "1310" may well find nothing.
+        //
+        // The spelling was lost when the check moved out of this adapter and into
+        // the cascade rule, which runs for every source and therefore sees only
+        // what normalisation left. That is a real downgrade to what someone holds
+        // when they act on this flag, accepted because the check it replaces
+        // existed in this adapter and in neither of the others — BetaPos was
+        // publishing dangling references in silence. The tax-basis flag still
+        // quotes the raw id, because the adapter still raises it.
+        self::assertSame(['1310'], $ids, 'The flag did not quote the composite in its canonical spelling');
+        self::assertStringContainsString('1310', $details[0] ?? '', 'The flag did not name the withheld composite');
+        self::assertStringContainsString('1210', $details[0] ?? '', 'The flag did not name the missing component');
     }
 
     public function testAMembershipRowNamingAParentThatDoesNotExistIsRefused(): void

@@ -91,6 +91,42 @@ final class BetaPosTest extends TestCase
         );
     }
 
+    public function testAComponentThisExportDoesNotDescribeWithholdsTheCompositeRatherThanPublishingIt(): void
+    {
+        // A regression, and it is worth being exact about what regressed. Against
+        // this adapter as committed at step 6 the assertions below both fail: a
+        // <component> naming a product with no <product> element of its own built
+        // a reference like any other, CanonicalMenu::of only looked for duplicate
+        // SKUs, and the run produced canonical JSON referencing 1210 — a SKU no
+        // consumer could resolve — with no flag and no error.
+        //
+        // The check existed in GammaPosAdapter and only there. That is the shape
+        // of bug a rule per adapter produces, and the reason this one is now a
+        // rule in the domain: the fix arrived here without this file being
+        // touched.
+        $result = (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="100" vat="V10"/>
+                <product code="1310" name="Breakfast set" net="220" vat="V10">
+                    <component code="1210" qty="1"/>
+                </product>
+            </catalogue>
+            XML);
+
+        self::assertSame(
+            ['99'],
+            array_map(static fn (Item $item): string => $item->sku->value, $result->menu->items),
+            'A composite referencing a product this export does not contain was published',
+        );
+
+        self::assertSame(
+            [FlagReason::ComponentMissing],
+            array_map(static fn (Flag $flag): FlagReason => $flag->reason, $result->flags),
+            'The composite vanished or was published without anyone being told why',
+        );
+    }
+
     public function testAMalformedNetPriceIsRefusedEvenOnAnItemThatWouldBeWithheldAnyway(): void
     {
         // Structure is read before anything is resolved, so whether a broken file

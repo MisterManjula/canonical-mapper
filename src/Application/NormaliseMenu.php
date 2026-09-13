@@ -11,6 +11,7 @@ use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Unresolved;
+use CanonicalMapper\Domain\Rule\ComponentCascadeRule;
 
 /**
  * Runs an adapter and decides what to do with what it reports.
@@ -20,6 +21,11 @@ use CanonicalMapper\Domain\Resolution\Unresolved;
  * of "a withheld item does not block unrelated items", and it is deliberately not
  * spread across the adapters — three copies of this decision would be three
  * chances to make it differently, and the guarantee is that it is made once.
+ *
+ * Cascade is the other half of withholding and is deliberately *not* here. That
+ * a composite missing a component cannot be described is a fact about the
+ * canonical model, true of a file this use case has never read; it belongs to
+ * the domain, and arrives here as one call on the way in.
  */
 final class NormaliseMenu
 {
@@ -31,7 +37,14 @@ final class NormaliseMenu
         $items = [];
         $flags = [];
 
-        foreach ($adapter->read($contents) as $resolution) {
+        // Cascade before containment, and in that order for a reason: the rule
+        // turns a composite whose component is missing into one more Unresolved,
+        // and the loop below then treats it exactly like any other — one
+        // `continue`, one flag, neighbours untouched. Containment did not have to
+        // learn what a composite is.
+        $resolutions = ComponentCascadeRule::apply($adapter->sourceName(), $adapter->read($contents));
+
+        foreach ($resolutions as $resolution) {
             if ($resolution instanceof Unresolved) {
                 $flags[] = $resolution->flag;
 

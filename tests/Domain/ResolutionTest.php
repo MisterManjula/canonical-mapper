@@ -76,12 +76,31 @@ final class ResolutionTest extends TestCase
 
     public function testTheSourceProductIdIsTheRawSpellingAndNotTheNormalisedOne(): void
     {
-        $flag = Flag::componentMissing(SourceName::of('GammaPos'), 'P-1204', Sku::ofDigits('1204'), 'P-1210');
+        $flag = Flag::taxBasisUnknown(SourceName::of('AlphaPos'), '001204', Sku::ofDigits('1204'), 'V99');
 
-        // Searching GammaPos for "1204" may well find nothing: the prefix is how
+        // Searching AlphaPos for "1204" may well find nothing: the padding is how
         // that system spells the identifier, and the flag is read over there.
-        self::assertSame('P-1204', $flag->sourceProductId, 'The flag normalised an id that has to stay searchable');
+        self::assertSame('001204', $flag->sourceProductId, 'The flag normalised an id that has to stay searchable');
         self::assertSame('1204', $flag->sku?->value, 'The flag lost the canonical SKU');
+    }
+
+    public function testAFlagRaisedByARuleRatherThanAnAdapterHasNoRawSpellingToQuote(): void
+    {
+        // The exception to the test above, and it used to be the example *for*
+        // it: this assertion read 'P-1204' until the dangling-component check
+        // moved out of GammaPosAdapter and into ComponentCascadeRule.
+        //
+        // A rule runs after every source has been normalised into one vocabulary,
+        // so there is no raw spelling left for it to quote — a GammaPos composite
+        // is named "1310" here where that system writes "P-1310". Accepted
+        // because the check it replaces lived in one adapter out of three, and
+        // the other two were publishing dangling references in silence.
+        $flag = Flag::componentMissing(SourceName::of('GammaPos'), Sku::ofDigits('1310'), Sku::ofDigits('1210'));
+
+        self::assertSame('1310', $flag->sourceProductId, 'A rule invented a source spelling it cannot know');
+        self::assertSame('1310', $flag->sku?->value, 'The flag is filed against something other than the composite');
+        self::assertStringContainsString('1210', $flag->detail, 'The flag did not name the component to go and find');
+        self::assertStringContainsString('GammaPos', $flag->detail, 'The flag did not name the system to open');
     }
 
     public function testASourceNameCannotBeBlank(): void

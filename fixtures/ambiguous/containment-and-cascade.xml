@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A BetaPos export where withholding has to do both of its jobs at once.
+
+  The croissant carries a tax code this mapper has no rate for, so it is withheld
+  — that much is the tax-basis case. The breakfast set contains the croissant, so
+  once the croissant is gone the set references a product that is not in this
+  export, and what the set *is* has not been stated either. It is withheld in its
+  turn, under a flag of its own: two flags, and the second one names the set.
+
+  The espresso and the juice are here to be undisturbed by all of it. They are
+  what makes this file about containment as well as cascade — the alternative to
+  both is rejecting an export that is, in three places out of four, perfectly
+  clear.
+-->
+<catalogue>
+    <product code="99" name="Espresso" net="100" vat="V10"/>
+    <product code="1100" name="Croissant" net="150" vat="V99"/>
+    <product code="1204" name="Orange juice" net="250" vat="V22"/>
+    <product code="1310" name="Breakfast set" net="220" vat="V10">
+        <component code="1100" qty="1"/>
+    </product>
+</catalogue>

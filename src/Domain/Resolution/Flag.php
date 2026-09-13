@@ -22,6 +22,12 @@ use CanonicalMapper\Domain\Canonical\Sku;
  * and it is nullable because some failures happen before an identifier can be
  * normalised at all.
  *
+ * With one exception, named where it happens: a flag raised by a domain rule
+ * rather than by an adapter carries the canonical spelling in both fields,
+ * because a rule that runs after normalisation has no access to the file's own.
+ * That is a genuine loss to the person reading it, and it is the price of the
+ * rule being one rule instead of one per source.
+ *
  * $source is a name, not a choice from a list. The adapter supplies it, because
  * the adapter is the only thing in this project that knows which system it has
  * been reading; the sentences below name a system to open without this class
@@ -64,25 +70,35 @@ final class Flag
         );
     }
 
-    public static function componentMissing(
-        SourceName $source,
-        string $sourceProductId,
-        ?Sku $sku,
-        string $missingComponentId,
-    ): self {
+    /**
+     * Raised by the cascade rule and by nothing else, which is why this is the
+     * one constructor here that takes no raw source id: a domain rule has never
+     * seen the file, and the SKUs are all it holds.
+     *
+     * That costs something real, and the cost is paid deliberately. A GammaPos
+     * composite is named here as "1310" where that system spells it "P-1310",
+     * so the identifier on this flag is one a person may have to re-prefix
+     * before searching. The alternative was to keep the check in each adapter,
+     * where the raw spellings live — and one adapter did not have it at all.
+     * A rule that runs for every source, in the vocabulary every source has been
+     * normalised into, is worth more than a prefix.
+     */
+    public static function componentMissing(SourceName $source, Sku $composite, Sku $component): self
+    {
         return new self(
             $source,
-            $sourceProductId,
-            $sku,
+            $composite->value,
+            $composite,
             FlagReason::ComponentMissing,
             sprintf(
-                'Composite %s references component %s, which is not present in this export, '
-                . 'so its price cannot be determined; check whether %s was deleted or simply '
-                . 'not included in the %s extract.',
-                $sourceProductId,
-                $missingComponentId,
-                $missingComponentId,
+                'Composite %s is withheld because component %s is not present in this export, '
+                . 'so what the composite contains cannot be determined; check in %s whether %s '
+                . 'was deleted, or is withheld under a flag of its own, or is simply not in '
+                . 'this extract.',
+                $composite->value,
+                $component->value,
                 $source->value,
+                $component->value,
             ),
         );
     }

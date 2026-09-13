@@ -11,7 +11,6 @@ use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Canonical\Money;
 use CanonicalMapper\Domain\Canonical\Sku;
 use CanonicalMapper\Domain\InvariantViolated;
-use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Resolved;
 use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
@@ -45,11 +44,17 @@ use CanonicalMapper\Infrastructure\Source\SourceSystem;
  * reason this format's separator differs from its name.
  *
  * A membership row naming a component with no product row of its own is the
- * ambiguity this source can express: the composite references something the
- * export does not describe, so its recipe — and therefore what it is — cannot be
- * determined, and it is withheld. A membership row naming a *parent* with no
- * product row is not ambiguous but contradictory: the file says a product is
- * part of something it never mentions again, and there is no item to withhold.
+ * ambiguity this source can express, and this adapter no longer answers it. It
+ * reports the reference it was given; the composite is withheld by the cascade
+ * rule in the domain, which does the same for the two formats that can express
+ * the same gap and for the one that cannot yet. What this adapter lost by that
+ * is the "P-" spelling on the resulting flag, which is a real loss and a small
+ * one beside a check that existed in one adapter out of three.
+ *
+ * A membership row naming a *parent* with no product row stays here, and stays a
+ * MalformedSource: it is not ambiguous but contradictory. The file says a product
+ * is part of something it never mentions again, so there is no composite to
+ * withhold and nothing for a rule about composites to act on.
  */
 final class GammaPosAdapter implements SourceAdapter
 {
@@ -98,7 +103,6 @@ final class GammaPosAdapter implements SourceAdapter
     private static function assemble(array $products, array $memberships): array
     {
         $recipes = [];
-        $missing = [];
 
         foreach ($memberships as $membership) {
             if (!array_key_exists($membership['parent']->value, $products)) {
@@ -110,17 +114,11 @@ final class GammaPosAdapter implements SourceAdapter
                 ));
             }
 
-            if (!array_key_exists($membership['child']->value, $products)) {
-                // The composite cannot be described without knowing what is in it,
-                // so it is withheld rather than published with a shortened recipe.
-                // Only the first missing component is named: a flag is a work item
-                // and the person acting on it will be looking at the whole export
-                // by the time they have found the second.
-                $missing[$membership['parent']->value] ??= $membership['childPlu'];
-
-                continue;
-            }
-
+            // A membership row naming a child with no product row of its own is
+            // not checked here, and the reference is built regardless. That the
+            // composite must then be withheld is true of every format, so it is
+            // ruled on once in the domain rather than a third time in the one
+            // adapter that happened to notice it first.
             $recipes[$membership['parent']->value][] = ComponentRef::of(
                 $membership['child'],
                 $membership['quantity'],
@@ -130,19 +128,6 @@ final class GammaPosAdapter implements SourceAdapter
         $resolutions = [];
 
         foreach ($products as $key => $product) {
-            $missingComponent = $missing[$key] ?? null;
-
-            if ($missingComponent !== null) {
-                $resolutions[] = Unresolved::because(Flag::componentMissing(
-                    SourceSystem::Gamma->sourceName(),
-                    $product['plu'],
-                    $product['sku'],
-                    $missingComponent,
-                ));
-
-                continue;
-            }
-
             $components = $recipes[$key] ?? [];
 
             try {
