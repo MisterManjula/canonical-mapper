@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A BetaPos export where one product carries a tax code this mapper has no rate
+  for. The file is well formed and nothing about it is broken; it states a fact
+  that cannot be interpreted, which is a different thing and gets a different
+  answer. The other two products are here so that the answer can be seen to be
+  contained.
+-->
+<catalogue>
+    <product code="99" name="Espresso" net="100" vat="V10"/>
+    <product code="1100" name="Croissant" net="150" vat="V99"/>
+    <product code="1204" name="Orange juice" net="250" vat="V22"/>
+</catalogue>
