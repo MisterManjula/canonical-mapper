@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Infrastructure\Source;
 
+use CanonicalMapper\Application\Port\SourceAdapter;
 use CanonicalMapper\Domain\Resolution\SourceName;
+use CanonicalMapper\Infrastructure\Source\Alpha\AlphaPosAdapter;
+use CanonicalMapper\Infrastructure\Source\Beta\BetaPosAdapter;
+use CanonicalMapper\Infrastructure\Source\Gamma\GammaPosAdapter;
 
 /**
  * Which export a value came from.
@@ -50,5 +54,34 @@ enum SourceSystem: string
     public function sourceName(): SourceName
     {
         return SourceName::of($this->displayName());
+    }
+
+    /**
+     * The adapter that reads this source's exports.
+     *
+     * The whole of the CLI's wiring, and it is one match rather than a container
+     * or a factory interface: there are three sources, they are known at compile
+     * time, and the indirection would buy nothing that this does not already
+     * give. What it does give is the exhaustiveness the class docblock promises —
+     * a fourth case added above and forgotten here fails analysis, in the file
+     * that already knows how many sources there are.
+     */
+    public function adapter(): SourceAdapter
+    {
+        return match ($this) {
+            self::Alpha => new AlphaPosAdapter(),
+            self::Beta => new BetaPosAdapter(),
+            self::Gamma => new GammaPosAdapter(),
+        };
+    }
+
+    /**
+     * The three names this enum answers to, for a message that has to list them.
+     *
+     * @return non-empty-list<string>
+     */
+    public static function names(): array
+    {
+        return array_map(static fn (self $source): string => $source->value, self::cases());
     }
 }

@@ -1,0 +1,33 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * The only file in this project that writes to a stream or ends a process.
+ *
+ * It holds no decisions on purpose. NormaliseCommand returns what a run
+ * produced as three values, and everything below is handing them over — which
+ * is why the command can be tested as ordinary values, and why the part that
+ * cannot be tested that way is four lines long and has nothing in it to get
+ * wrong.
+ *
+ * No .php extension, because this is a command and not a library file: it is
+ * typed by a person and read by a shell, and `bin/normalise.php` would be the
+ * only thing here that made the reader think about PHP. The shebang is what the
+ * shell uses; PHP strips it when the file is the script being run.
+ */
+
+use CanonicalMapper\Infrastructure\Cli\NormaliseCommand;
+
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+$output = (new NormaliseCommand())->run(array_slice($argv, 1));
+
+// Canonical JSON on stdout and the flag report on stderr, so that redirecting
+// stdout to a file gives a menu and nothing else, and the questions are still
+// on the terminal where somebody sees them.
+fwrite(STDOUT, $output->stdout);
+fwrite(STDERR, $output->stderr);
+
+exit($output->exitCode->value);

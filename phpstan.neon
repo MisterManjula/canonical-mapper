@@ -4,8 +4,11 @@ parameters:
     paths:
         - src
         - tests
-        # bin/normalise is added here when it exists. It has no .php extension, so
-        # it must be listed as a file rather than picked up from a directory.
+        # Listed as a file rather than picked up from a directory: it has no .php
+        # extension, so scanning bin/ would find nothing. The entry point is four
+        # lines and is analysed like everything else, because "it is only wiring"
+        # is what every unanalysed file says about itself.
+        - bin/normalise
 
     excludePaths:
         analyseAndScan:
