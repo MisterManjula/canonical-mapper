@@ -1,0 +1,7 @@
+PLU;NAME;PRICE;PARENT_PLU;QTY
+P-99;Espresso;1,10;;
+P-1100;Croissant;1,65;;
+P-1204;Orange juice;3,05;;
+P-1310;Breakfast set;2,42;;
+P-99;;;P-1310;1
+P-1100;;;P-1310;1
