@@ -66,13 +66,39 @@ final class Promotion
     /**
      * Whether both promotions are in force on at least one shared day.
      *
-     * The test the conflict case is built on: two overlapping promotions with
-     * different prices leave no single price to publish on the days they share,
-     * which is what makes the item unresolvable rather than merely untidy.
+     * This is not the conflict test, and it used to be described as one. What
+     * makes an item unresolvable is that the canonical model carries one
+     * promotion per product and the source stated two — overlapping or not, there
+     * is no single one to publish. What overlapping decides is how sharp the
+     * question is, and therefore which sentence the flag writes: two promotions
+     * in force on the same days leave no price for those days, which is worth
+     * saying differently from two that merely cannot both fit in one slot.
      */
     public function overlaps(self $other): bool
     {
         return $this->from <= $other->to && $other->from <= $this->to;
+    }
+
+    /**
+     * Whether these are the same offer written twice.
+     *
+     * Price and both dates, which is everything this value has. A source is
+     * allowed to state one promotion twice — an export assembled from two queries
+     * will — and two identical statements answer the same question the same way,
+     * so they collapse to one rather than being read as a contradiction.
+     *
+     * Deliberately not "the same price on overlapping days". Two promotions at
+     * the same price over different ranges are two different offers, and merging
+     * them would mean publishing a range neither of them states.
+     */
+    public function equals(self $other): bool
+    {
+        // Compared as timestamps rather than as objects. Both ends are pinned to
+        // UTC midnight on the way in, so this is a comparison of days, and it is
+        // strict where == between two DateTimeImmutable would quietly not be.
+        return $this->price->minorUnits === $other->price->minorUnits
+            && $this->from->getTimestamp() === $other->from->getTimestamp()
+            && $this->to->getTimestamp() === $other->to->getTimestamp();
     }
 
     /**

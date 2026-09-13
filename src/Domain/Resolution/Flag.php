@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CanonicalMapper\Domain\Resolution;
 
+use CanonicalMapper\Domain\Canonical\Promotion;
 use CanonicalMapper\Domain\Canonical\Sku;
 
 /**
@@ -103,25 +104,61 @@ final class Flag
         );
     }
 
+    /**
+     * Raised by the conflict rule, which — unlike the cascade rule — runs while
+     * the adapter is still reading the product, so the raw spelling is in hand
+     * and is passed in rather than lost.
+     *
+     * Two sentences for one reason, which is a departure from the one-constructor
+     * rule above and stays inside it: the constructor is still one, and the
+     * choice between the wordings is made here, beside them, rather than by a
+     * caller assembling a phrase. Two promotions in force on days they share
+     * leave no price for those days, and that is a sharper thing to be told than
+     * that two offers cannot both fit in one slot.
+     */
     public static function promotionConflict(
         SourceName $source,
         string $sourceProductId,
         ?Sku $sku,
-        string $overlappingPeriod,
+        Promotion $first,
+        Promotion $second,
     ): self {
-        return new self(
-            $source,
-            $sourceProductId,
-            $sku,
-            FlagReason::PromotionConflict,
-            sprintf(
-                'Product %s has two promotions with different results overlapping on %s, so '
-                . 'there is no single price to publish for those days; decide in %s which '
-                . 'promotion applies and shorten the other.',
+        $detail = $first->overlaps($second)
+            ? sprintf(
+                'Product %s has two promotions in force on days they share — %s, and %s — so '
+                . 'there is no single price to publish for those days; decide in %s which one '
+                . 'applies and shorten the other.',
                 $sourceProductId,
-                $overlappingPeriod,
+                self::describe($first),
+                self::describe($second),
                 $source->value,
-            ),
+            )
+            : sprintf(
+                'Product %s has two promotions — %s, and %s — and the canonical menu carries '
+                . 'one promotion per product, so there is no single one to publish; decide in '
+                . '%s which of them this menu should state.',
+                $sourceProductId,
+                self::describe($first),
+                self::describe($second),
+                $source->value,
+            );
+
+        return new self($source, $sourceProductId, $sku, FlagReason::PromotionConflict, $detail);
+    }
+
+    /**
+     * Minor units, unformatted, for the reason the writer gives: a formatted
+     * price needs a decimal separator, and which separator to use is the thing
+     * the three sources disagree about. The number here is the number the
+     * canonical output would have carried, so the two can be read side by side.
+     */
+    private static function describe(Promotion $promotion): string
+    {
+        return sprintf(
+            '%d minor units from %s to %s',
+            $promotion->price->minorUnits,
+            $promotion->from->format('Y-m-d'),
+            $promotion->to->format('Y-m-d'),
         );
     }
 }

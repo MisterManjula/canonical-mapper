@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The same two products as promotions/alpha.json, stated the way BetaPos states
+  things: net amounts under a tax code, and a promotion that gives a price rather
+  than a discount.
+
+  Neither number in this file appears in the canonical output. The espresso is
+  200 net at 10% — a gross 220 — and its promotion is 160 net at the same rate,
+  a gross 176, which is the 20% off that AlphaPos writes as a percentage. The
+  canonical model stores the result and not the mechanism, so the two files
+  converge on identical bytes while agreeing about none of their own.
+-->
+<catalogue>
+    <product code="99" name="Espresso" net="200" vat="V10">
+        <promotion price="160" from="2026-03-01" to="2026-03-10"/>
+    </product>
+    <product code="1204" name="Orange juice" net="250" vat="V22"/>
+</catalogue>

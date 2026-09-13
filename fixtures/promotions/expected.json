@@ -1,0 +1,23 @@
+{
+    "currency": "EUR",
+    "items": [
+        {
+            "sku": "99",
+            "name": "Espresso",
+            "price": 220,
+            "components": [],
+            "promotion": {
+                "price": 176,
+                "from": "2026-03-01",
+                "to": "2026-03-10"
+            }
+        },
+        {
+            "sku": "1204",
+            "name": "Orange juice",
+            "price": 305,
+            "components": [],
+            "promotion": null
+        }
+    ]
+}

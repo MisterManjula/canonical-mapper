@@ -127,6 +127,113 @@ final class BetaPosTest extends TestCase
         );
     }
 
+    public function testAPromotionalPriceIsNetAndIsReadUnderTheProductsOwnTaxCode(): void
+    {
+        // Every amount in a BetaPos file is net, and a promotion is not an
+        // exception to that: a till that stores net prices does not store one
+        // gross number in the middle of them. So 160 under V10 is a gross 176,
+        // the same 176 the other source reaches by taking 20% off 2.20.
+        $result = (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="200" vat="V10">
+                    <promotion price="160" from="2026-03-01" to="2026-03-10"/>
+                </product>
+            </catalogue>
+            XML);
+
+        $item = $result->menu->items[0] ?? null;
+
+        if ($item === null) {
+            self::fail('The export produced no items');
+        }
+
+        self::assertSame(220, $item->price->minorUnits, 'The usual price was not read at gross');
+        self::assertSame(176, $item->promotion?->price->minorUnits, 'The promotional price was not read at gross');
+    }
+
+    public function testTwoPromotionsInForceAtOnceWithholdTheItemHereToo(): void
+    {
+        // The same rule as the other source, reached through a different format
+        // and a different mechanism. It is one rule in the domain rather than a
+        // feature of the adapter that happened to need it first, and this is what
+        // says so from the outside.
+        $result = (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="200" vat="V10">
+                    <promotion price="160" from="2026-03-01" to="2026-03-10"/>
+                    <promotion price="180" from="2026-03-05" to="2026-03-20"/>
+                </product>
+            </catalogue>
+            XML);
+
+        self::assertSame([], $result->menu->items, 'A product with two promotions at once was published anyway');
+        self::assertSame(
+            [FlagReason::PromotionConflict],
+            array_map(static fn (Flag $flag): FlagReason => $flag->reason, $result->flags),
+            'The withheld item did not produce exactly one promotion-conflict flag',
+        );
+    }
+
+    public function testAnUnknownTaxCodeIsReportedRatherThanThePromotionsItAlsoMakesUnreadable(): void
+    {
+        // Both facts about this product are unknowable, and they are not two
+        // questions. Without a rate there is no promotional price either, so
+        // asking someone to choose between two promotions they cannot see the
+        // prices of would be a work item nobody can act on. The rate is the one
+        // thing to fix, and fixing it answers the rest.
+        $result = (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="200" vat="V99">
+                    <promotion price="160" from="2026-03-01" to="2026-03-10"/>
+                    <promotion price="180" from="2026-03-05" to="2026-03-20"/>
+                </product>
+            </catalogue>
+            XML);
+
+        self::assertSame(
+            [FlagReason::TaxBasisUnknown],
+            array_map(static fn (Flag $flag): FlagReason => $flag->reason, $result->flags),
+            'An item with no readable price was reported as a promotion problem, or reported twice',
+        );
+    }
+
+    public function testAnAttributeOnAPromotionTheAdapterHasNotBeenTaughtToReadIsRefused(): void
+    {
+        // "percent" is how the other source states a promotion. Accepting it here
+        // would be this adapter reading a second format's spelling, and then
+        // choosing between two answers when a file carried both.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="200" vat="V10">
+                    <promotion price="160" percent="20" from="2026-03-01" to="2026-03-10"/>
+                </product>
+            </catalogue>
+            XML);
+    }
+
+    public function testAPromotionDateThatIsNotARealDayIsRefused(): void
+    {
+        // The 30th of February parses and comes back as the 2nd of March, so
+        // without the canonical type's round trip a typo would move a promotion
+        // instead of being reported.
+        $this->expectException(MalformedSource::class);
+
+        (new NormaliseMenu())->run(new BetaPosAdapter(), <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <catalogue>
+                <product code="99" name="Espresso" net="200" vat="V10">
+                    <promotion price="160" from="2026-02-30" to="2026-03-10"/>
+                </product>
+            </catalogue>
+            XML);
+    }
+
     public function testAMalformedNetPriceIsRefusedEvenOnAnItemThatWouldBeWithheldAnyway(): void
     {
         // Structure is read before anything is resolved, so whether a broken file

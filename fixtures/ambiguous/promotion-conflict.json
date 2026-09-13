@@ -1,0 +1,28 @@
+{
+    "menu": {
+        "products": [
+            {
+                "plu": "000099",
+                "name": "Espresso",
+                "price": "1.10",
+                "promotions": [
+                    { "percent": 20, "from": "2026-03-01", "to": "2026-03-10" },
+                    { "percent": 10, "from": "2026-03-05", "to": "2026-03-20" }
+                ]
+            },
+            {
+                "plu": "001100",
+                "name": "Croissant",
+                "price": "1.65",
+                "promotions": [
+                    { "percent": 20, "from": "2026-04-01", "to": "2026-04-30" }
+                ]
+            },
+            {
+                "plu": "001204",
+                "name": "Orange juice",
+                "price": "3.05"
+            }
+        ]
+    }
+}

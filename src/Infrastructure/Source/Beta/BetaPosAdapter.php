@@ -9,12 +9,14 @@ use CanonicalMapper\Application\Port\SourceAdapter;
 use CanonicalMapper\Domain\Canonical\ComponentRef;
 use CanonicalMapper\Domain\Canonical\Item;
 use CanonicalMapper\Domain\Canonical\Money;
+use CanonicalMapper\Domain\Canonical\Promotion;
 use CanonicalMapper\Domain\Canonical\Sku;
 use CanonicalMapper\Domain\InvariantViolated;
 use CanonicalMapper\Domain\Resolution\Flag;
 use CanonicalMapper\Domain\Resolution\Resolved;
 use CanonicalMapper\Domain\Resolution\SourceName;
 use CanonicalMapper\Domain\Resolution\Unresolved;
+use CanonicalMapper\Domain\Rule\PromotionConflictRule;
 use CanonicalMapper\Infrastructure\Source\SourceSystem;
 use DOMDocument;
 use DOMElement;
@@ -42,6 +44,13 @@ use LibXMLError;
  * component naming a product the file does not contain is a question rather than
  * a contradiction.
  *
+ * Promotions are stated the same way, as elements on the product, and they state
+ * a promotional price rather than a discount: this source keeps net amounts and
+ * a tax code, so a promotion here is one more net amount under the same code.
+ * The canonical model stores neither mechanism — it stores the gross price that
+ * results — which is why an export saying "160 net, V10, for ten days" and one
+ * saying "20% off" produce the same bytes.
+ *
  * DOM rather than SimpleXML throughout. SimpleXML returns an object, or null, or
  * false from nearly every call and its property access cannot be typed, which at
  * level max means every value arrives as mixed and every guarantee about it has
@@ -53,6 +62,15 @@ final class BetaPosAdapter implements SourceAdapter
     private const PRODUCT_ATTRIBUTES = ['code', 'name', 'net', 'vat'];
 
     private const COMPONENT_ATTRIBUTES = ['code', 'qty'];
+
+    private const PROMOTION_ATTRIBUTES = ['price', 'from', 'to'];
+
+    /**
+     * Both kinds of child a product may have. They are read in document order
+     * from one pass rather than by two searches, so an element belonging to
+     * neither is refused where it stands.
+     */
+    private const PRODUCT_CHILDREN = ['component', 'promotion'];
 
     public function sourceName(): SourceName
     {
@@ -74,7 +92,7 @@ final class BetaPosAdapter implements SourceAdapter
 
         $resolutions = [];
 
-        foreach (self::children($root, 'product', 'catalogue') as $product) {
+        foreach (self::children($root, ['product'], 'catalogue') as $product) {
             $resolutions[] = self::product($product);
         }
 
@@ -120,16 +138,23 @@ final class BetaPosAdapter implements SourceAdapter
         $sku = self::sku($code, $context);
         $name = self::attribute($element, 'name', $context);
 
+        // Read before the rate is looked up, for the reason given below: a net
+        // price that is not a number is a broken export whatever its tax code
+        // says.
+        $vat = self::attribute($element, 'vat', $context);
+        $net = self::wholeNumber(self::attribute($element, 'net', $context), $context . ' net');
+
         $components = [];
+        $offers = [];
 
-        foreach (self::children($element, 'component', $context) as $component) {
-            $componentContext = sprintf('%s component', $context);
-            self::rejectUnknownAttributes($component, self::COMPONENT_ATTRIBUTES, $componentContext);
+        foreach (self::children($element, self::PRODUCT_CHILDREN, $context) as $child) {
+            if ($child->tagName === 'component') {
+                $components[] = self::component($child, sprintf('%s component', $context));
 
-            $components[] = ComponentRef::of(
-                self::sku(self::attribute($component, 'code', $componentContext), $componentContext),
-                self::wholeNumber(self::attribute($component, 'qty', $componentContext), $componentContext . ' qty'),
-            );
+                continue;
+            }
+
+            $offers[] = self::offer($child, sprintf('%s promotion', $context));
         }
 
         // Everything structural is read before anything is resolved, so that a
@@ -137,20 +162,111 @@ final class BetaPosAdapter implements SourceAdapter
         // Resolving first would make the difference between "this export is
         // broken" and "this item needs a decision" depend on which of the two the
         // parser met first, and those two answers go to different people.
-        $price = self::price($element, $code, $sku, $context);
+        $rate = VatCode::rateFor($vat);
 
         // The one branch this adapter exists to make unforgettable. Handling it is
         // not a courtesy to the reader: the method promises a union, and PHPStan
         // will not accept a body that produces only half of it.
-        if ($price instanceof Unresolved) {
-            return $price;
+        //
+        // Withheld rather than refused, and withheld rather than defaulted. The
+        // file is fine; the question is what this code means, and it is one a
+        // person can answer in BetaPos in under a minute. Defaulting to the
+        // commoner rate would publish a price nobody chose.
+        if ($rate === null) {
+            return Unresolved::because(Flag::taxBasisUnknown(SourceSystem::Beta->sourceName(), $code, $sku, $vat));
+        }
+
+        $price = Money::fromNetMinorUnitsAndVatPercent($net, $rate);
+
+        $promotion = PromotionConflictRule::apply(
+            SourceSystem::Beta->sourceName(),
+            $code,
+            $sku,
+            self::promotions($offers, $rate),
+        );
+
+        if ($promotion instanceof Unresolved) {
+            return $promotion;
         }
 
         if ($components === []) {
-            return Resolved::of(Item::simple($sku, $name, $price->value));
+            return Resolved::of(Item::simple($sku, $name, $price, $promotion->value));
         }
 
-        return Resolved::of(Item::composite($sku, $name, $price->value, $components));
+        return Resolved::of(Item::composite($sku, $name, $price, $components, $promotion->value));
+    }
+
+    /**
+     * @throws MalformedSource
+     * @throws InvariantViolated
+     */
+    private static function component(DOMElement $element, string $context): ComponentRef
+    {
+        self::rejectUnknownAttributes($element, self::COMPONENT_ATTRIBUTES, $context);
+
+        return ComponentRef::of(
+            self::sku(self::attribute($element, 'code', $context), $context),
+            self::wholeNumber(self::attribute($element, 'qty', $context), $context . ' qty'),
+        );
+    }
+
+    /**
+     * One promotion as the file states it, before anything has been computed.
+     *
+     * BetaPos states a promotional price rather than a discount, and states it
+     * the way it states every other price: net, in minor units, under the
+     * product's own tax code. A gross amount here would be the one number in the
+     * file a customer could read, which is not what this source is.
+     *
+     * @return array{net: int, from: string, to: string}
+     *
+     * @throws MalformedSource
+     */
+    private static function offer(DOMElement $element, string $context): array
+    {
+        self::rejectUnknownAttributes($element, self::PROMOTION_ATTRIBUTES, $context);
+
+        return [
+            'net' => self::wholeNumber(self::attribute($element, 'price', $context), $context . ' price'),
+            'from' => self::attribute($element, 'from', $context),
+            'to' => self::attribute($element, 'to', $context),
+        ];
+    }
+
+    /**
+     * The promotions at gross, in the order the file stated them.
+     *
+     * This runs after the rate has been resolved and not before, which leaves one
+     * gap worth naming rather than hiding: a promotion whose date is not a real
+     * day, on a product whose tax code this mapper does not know, is withheld
+     * under the tax-code flag instead of refusing the export. The dates are
+     * checked by the canonical type, a promotion cannot be built without a price,
+     * and the price is the thing that is unknown — so the alternative was to
+     * invent an amount purely to validate a date against, which is a worse thing
+     * to have in the code than this paragraph. Nothing wrong is published either
+     * way: the item is withheld in both readings, and only the wording of the
+     * report differs.
+     *
+     * @param list<array{net: int, from: string, to: string}> $offers
+     * @param int<0, 100> $rate
+     *
+     * @return list<Promotion>
+     *
+     * @throws InvariantViolated
+     */
+    private static function promotions(array $offers, int $rate): array
+    {
+        $promotions = [];
+
+        foreach ($offers as $offer) {
+            $promotions[] = Promotion::atPrice(
+                Money::fromNetMinorUnitsAndVatPercent($offer['net'], $rate),
+                $offer['from'],
+                $offer['to'],
+            );
+        }
+
+        return $promotions;
     }
 
     /**
@@ -169,33 +285,6 @@ final class BetaPosAdapter implements SourceAdapter
         } catch (InvariantViolated $violation) {
             throw new MalformedSource(sprintf('%s: %s', $context, $violation->detail));
         }
-    }
-
-    /**
-     * @return Resolved<Money>|Unresolved
-     *
-     * @throws MalformedSource
-     * @throws InvariantViolated
-     */
-    private static function price(DOMElement $element, string $code, Sku $sku, string $context): Resolved|Unresolved
-    {
-        $vat = self::attribute($element, 'vat', $context);
-
-        // Read before the rate is looked up, for the reason given in readProduct():
-        // a net price that is not a number is a broken export either way.
-        $net = self::wholeNumber(self::attribute($element, 'net', $context), $context . ' net');
-
-        $rate = VatCode::rateFor($vat);
-
-        if ($rate === null) {
-            // Withheld rather than refused, and withheld rather than defaulted.
-            // The file is fine; the question is what this code means, and it is
-            // one a person can answer in BetaPos in under a minute. Defaulting to
-            // the commoner rate would publish a price nobody chose.
-            return Unresolved::because(Flag::taxBasisUnknown(SourceSystem::Beta->sourceName(), $code, $sku, $vat));
-        }
-
-        return Resolved::of(Money::fromNetMinorUnitsAndVatPercent($net, $rate));
     }
 
     /**
@@ -247,11 +336,19 @@ final class BetaPosAdapter implements SourceAdapter
      * guess that it did not affect the price, which is the guess this project
      * exists to avoid making.
      *
+     * A list of names rather than one, since a product has two kinds of child.
+     * They come back in document order and mixed together, which is how the file
+     * writes them and is the caller's to sort out — the alternative was two
+     * passes with two names, and an element belonging to neither would then be
+     * refused twice or, more likely, once and by accident.
+     *
+     * @param non-empty-list<string> $names
+     *
      * @return list<DOMElement>
      *
      * @throws MalformedSource
      */
-    private static function children(DOMElement $parent, string $name, string $context): array
+    private static function children(DOMElement $parent, array $names, string $context): array
     {
         $found = [];
 
@@ -260,7 +357,7 @@ final class BetaPosAdapter implements SourceAdapter
                 continue;
             }
 
-            if ($node->tagName !== $name) {
+            if (!in_array($node->tagName, $names, true)) {
                 throw new MalformedSource(sprintf(
                     '%s contains a <%s>, which this adapter has not been taught to read.',
                     $context,
